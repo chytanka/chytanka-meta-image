@@ -7,8 +7,10 @@ const app = express();
 const culori = require('culori');
 const cors = require('cors');
 
+const port = process.env.PORT || 3000;
+
 corsOptions = {
-    origin: 'chytanka.github.io, chytanka.ink, chtnk.online',
+    origin: '*',
     optionsSuccessStatus: 200
 }
 app.use(cors(corsOptions));
@@ -108,7 +110,7 @@ app.get('/generate-image', async (req, res) => {
     }
 });
 
-app.listen(3002, () => {
+app.listen(port, () => {
     console.log('Server is running on port 3000');
 });
 
