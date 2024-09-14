@@ -9,6 +9,9 @@ const cors = require('cors');
 
 const port = process.env.PORT || 3000;
 
+const TYPE = `image/jpeg`
+const Q = .8;
+
 corsOptions = {
     origin: '*',
     optionsSuccessStatus: 200
@@ -37,8 +40,11 @@ class Base64 {
     }
 }
 
+console.log(Base64.toBase64(`{"title":"Псевдогарем","author":"Saitou Yuu","copyright": "mangadex"}`));
+
+
 app.get('/generate-image', async (req, res) => {
-    const { imageSrc, text } = req.query;
+    const { imageSrc, text, author } = req.query;
 
     const imageUrl = Base64.isBase64(imageSrc) ? Base64.fromBase64(imageSrc) : imageSrc;
 
@@ -46,6 +52,28 @@ app.get('/generate-image', async (req, res) => {
         return res.status(400).send('Missing imageUrl or text parameter');
     }
 
+    await run(res, imageUrl, text, author)
+});
+
+app.get('/:src/:jsonparams.jpg', async (req, res) => {
+    // const { imageSrc, text, author } = req.query;
+    const { src, jsonparams } = req.params
+    const imageUrl = Base64.isBase64(src) ? Base64.fromBase64(src) : src;
+
+    const { copyright, title, author } = JSON.parse(Base64.fromBase64(jsonparams))
+
+    console.log(copyright, title, author);
+
+
+    if (!imageUrl || !title) {
+        return res.status(400).send('Missing imageUrl or text parameter');
+    }
+
+    await run(res, imageUrl, title, author, copyright)
+});
+
+
+async function run(res, imageUrl, text, author, copyright) {
     try {
         registerFont('assets/Troubleside.ttf', { family: 'Troubleside' });
 
@@ -61,54 +89,71 @@ app.get('/generate-image', async (req, res) => {
         ctx.fillStyle = avarageColor.hex;
         ctx.fillRect(0, 0, width, height);
 
-        const padding = 50; // Відступ
-        const radius = 12; // Радіус заокруглення
+        const padding = 50;
+        const radius = 12;
 
         const imgHeight = height - padding * 2;
         const imgWidth = image.width / image.height * imgHeight;
 
-
-
-        // Додаємо текст
         const fontSize = 40;
         const lineHeight = fontSize * 1.3;
 
 
-        ctx.fillStyle = '#000000';
-        ctx.font = `bold ${fontSize}px "Troubleside"`;
-        ctx.textAlign = 'left';
+
+
 
         const maxTextWidth = width - imgWidth - padding * 3;
         const x = padding
-        const y = padding * 2
-        wrapText(ctx, text, x, y, maxTextWidth, lineHeight);
+        const y = padding * 1.5
+
+        ctx.font = `20px "Arial"`;
+        ctx.fillStyle = isLight(avarageColor.rgb) ? '#444' : "#ccc";
+        ctx.fillText(author, x, y)
+
+        ctx.font = `bold ${fontSize}px "Troubleside"`;
+        ctx.textAlign = 'left';
+
+
+        ctx.fillStyle = isLight(avarageColor.rgb) ? '#000000' : "#fff";
+        wrapText(ctx, text, x, y + lineHeight, maxTextWidth, lineHeight);
+
+
 
         drawImageWithPadding(ctx, image, width, height, padding, radius, shadowColor);
 
-        // Завантажуємо та вставляємо логотип
         const logoSrc = 'assets/logo.svg';
         const logoSize = 96;
-        const mdLogoSrc = 'assets/mangadex-logo.svg'
-        const mdLogoSize = 96;
+
 
         const logoX = padding;
         const logoY = height - logoSize - padding;
 
-        const mdLogoX = padding / 2 + logoX + logoSize;
-        const mdLogoY = height - mdLogoSize - padding;
-
         await grawSvg(ctx, logoSrc, logoSize, logoSize, logoX, logoY)
-        await grawSvg(ctx, mdLogoSrc, mdLogoSize, mdLogoSize, mdLogoX, mdLogoY)
+
+        if (copyright) {
+            const mdLogoSrc = `assets/${copyright}-logo.svg`
+            const mdLogoSize = 96;
+            const mdLogoX = padding / 2 + logoX + logoSize;
+            const mdLogoY = height - mdLogoSize - padding;
+
+            await grawSvg(ctx, mdLogoSrc, mdLogoSize, mdLogoSize, mdLogoX, mdLogoY)
+        }
 
 
-        // Відправляємо зображення у відповідь
-        res.setHeader('Content-Type', 'image/png');
-        canvas.createPNGStream().pipe(res);
+
+        const webp = canvas.toDataURL(TYPE, Q);
+        const webpBase64 = webp.split(',')[1];
+        const webpBuffer = Buffer.from(webpBase64, 'base64');
+
+        res.setHeader('Content-Type', TYPE)
+            .send(webpBuffer);
+
     } catch (error) {
         console.error('Error generating image:', error);
         res.status(500).send('Failed to generate image');
     }
-});
+}
+
 
 app.listen(port, () => {
     console.log('Server is running on port 3000');
@@ -181,13 +226,13 @@ function getAverageColor(img) {
 
 function shiftColor(hex, h) {
     const colorOklch = culori.oklch(culori.parse(hex));
- 
+
     colorOklch.c = colorOklch.c + 0.025
     colorOklch.l = colorOklch.l - .1
     colorOklch.h = (colorOklch.h + h) % 360;
 
     const newHexColor = culori.formatHex(colorOklch);
-  
+
     return newHexColor;
 }
 
@@ -238,3 +283,12 @@ function drawImageWithPadding(ctx, image, canvasWidth, canvasHeight, padding, ra
 
 
 };
+
+function isLight({ r, g, b }) {
+    const luminance =
+        (0.2126 * r) / 255 +
+        (0.7152 * g) / 255 +
+        (0.0722 * b) / 255;
+    return luminance > 0.5;
+
+}
