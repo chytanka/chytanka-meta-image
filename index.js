@@ -9,7 +9,6 @@ const cors = require('cors');
 
 const port = process.env.PORT || 3000;
 
-const TYPE = `image/jpeg`
 const Q = .8;
 
 corsOptions = {
@@ -40,40 +39,23 @@ class Base64 {
     }
 }
 
-console.log(Base64.toBase64(`{"title":"Псевдогарем","author":"Saitou Yuu","copyright": "mangadex"}`));
+console.log("http://localhost:" + port + "/" + Base64.toBase64('http://127.0.0.1:1000/__original_drawn_by_setu_kurokawa__a7fc1a1dd789a33d52a10ccf3224d449.jpg') + '/' + Base64.toBase64(`{"title":"Псевдогарем","author":"Saitou Yuu (斉藤 ゆう)","copyright": "mangadex"}`) + '.jpg');
 
-
-app.get('/generate-image', async (req, res) => {
-    const { imageSrc, text, author } = req.query;
-
-    const imageUrl = Base64.isBase64(imageSrc) ? Base64.fromBase64(imageSrc) : imageSrc;
-
-    if (!imageUrl || !text) {
-        return res.status(400).send('Missing imageUrl or text parameter');
-    }
-
-    await run(res, imageUrl, text, author)
-});
-
-app.get('/:src/:jsonparams.jpg', async (req, res) => {
-    // const { imageSrc, text, author } = req.query;
-    const { src, jsonparams } = req.params
+app.get('/:src/:jsonparams.:format', async (req, res) => {
+    const { src, jsonparams, format } = req.params
     const imageUrl = Base64.isBase64(src) ? Base64.fromBase64(src) : src;
 
     const { copyright, title, author } = JSON.parse(Base64.fromBase64(jsonparams))
-
-    console.log(copyright, title, author);
-
 
     if (!imageUrl || !title) {
         return res.status(400).send('Missing imageUrl or text parameter');
     }
 
-    await run(res, imageUrl, title, author, copyright)
+    await drawImage(res, imageUrl, title, author, copyright, format)
 });
 
 
-async function run(res, imageUrl, text, author, copyright) {
+async function drawImage(res, imageUrl, text, author, copyright, format) {
     try {
         registerFont('assets/Troubleside.ttf', { family: 'Troubleside' });
 
@@ -110,14 +92,13 @@ async function run(res, imageUrl, text, author, copyright) {
         ctx.fillStyle = isLight(avarageColor.rgb) ? '#444' : "#ccc";
         ctx.fillText(author, x, y)
 
-        ctx.font = `bold ${fontSize}px "Troubleside"`;
+        // ctx.font = `bold ${fontSize}px "Troubleside"`;
+        ctx.font = `${fontSize}px "Troubleside", "Arial", sans-serif`;
         ctx.textAlign = 'left';
 
 
         ctx.fillStyle = isLight(avarageColor.rgb) ? '#000000' : "#fff";
         wrapText(ctx, text, x, y + lineHeight, maxTextWidth, lineHeight);
-
-
 
         drawImageWithPadding(ctx, image, width, height, padding, radius, shadowColor);
 
@@ -141,11 +122,11 @@ async function run(res, imageUrl, text, author, copyright) {
 
 
 
-        const webp = canvas.toDataURL(TYPE, Q);
+        const webp = canvas.toDataURL(`image/${format}`, Q);
         const webpBase64 = webp.split(',')[1];
         const webpBuffer = Buffer.from(webpBase64, 'base64');
 
-        res.setHeader('Content-Type', TYPE)
+        res.setHeader('Content-Type', `image/${format}`)
             .send(webpBuffer);
 
     } catch (error) {
@@ -156,7 +137,7 @@ async function run(res, imageUrl, text, author, copyright) {
 
 
 app.listen(port, () => {
-    console.log('Server is running on port 3000');
+    console.log('Server is running on port:' + port);
 });
 
 async function dlImage(src) {
